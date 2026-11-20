@@ -12,7 +12,8 @@
  * touching disk.
  */
 
-import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 
@@ -33,6 +34,15 @@ const MAX_BODY_BYTES = 6 * 1024 * 1024
 
 /** Plugin-owned settings file under the harness home. */
 const SETTINGS_FILE = 'rules-manager.json'
+
+/** Directory, under the harness home, that holds automatic rule backups. */
+const BACKUP_DIR_NAME = 'rule-backups'
+
+/** How many backups one rule file keeps; older ones are pruned. */
+const MAX_BACKUPS_PER_TARGET = 50
+
+/** Largest rule file the plugin copies into the backup directory. */
+const MAX_BACKUP_BYTES = 4 * 1024 * 1024
 
 /**
  * Raise one failure the browser can present by code.
@@ -266,6 +276,222 @@ function resolveTarget(target) {
 }
 
 /**
+ * Root directory holding automatic rule backups.
+ * @returns the absolute backup root.
+ */
+function backupRoot() {
+  return join(harnessHome(), BACKUP_DIR_NAME)
+}
+
+/**
+ * Make one filesystem-safe path segment from a user-facing name.
+ * @param value - raw name.
+ * @param fallback - segment used when nothing usable remains.
+ * @returns the sanitized segment.
+ */
+function safeSegment(value, fallback) {
+  const cleaned = String(value ?? '')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/^[.\-]+|[.\-]+$/g, '')
+  return cleaned.slice(0, 40) || fallback
+}
+
+/**
+ * Local-time stamp used in backup file names: `YYYYMMDD-HHmmss-SSS`.
+ * @param date - instant to format.
+ * @returns the filename stamp.
+ */
+function localStamp(date) {
+  const pad = (value, width = 2) => String(value).padStart(width, '0')
+  return [
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`,
+    `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`,
+    pad(date.getMilliseconds(), 3),
+  ].join('-')
+}
+
+/**
+ * Directory name for one target's backups, readable in a file manager.
+ * @param target - resolved target.
+ * @returns `global-dsh`, `global-agents`, or `project-<name>-<hash>`.
+ */
+function targetSegment(target) {
+  if (target.scope === 'global') return `global-${target.key}`
+  const hash = createHash('sha1').update(pathKey(target.directory)).digest('hex').slice(0, 8)
+  return `project-${safeSegment(basename(target.directory), 'dir')}-${hash}`
+}
+
+/**
+ * Human-readable label stored beside each backup.
+ * @param target - resolved target.
+ * @returns a neutral label naming the rule and its owner.
+ */
+function targetLabel(target) {
+  if (target.scope === 'global') {
+    return `${target.key === 'dsh' ? 'user-global' : 'shared-agents'} · ${target.name}`
+  }
+  return `${basename(target.directory) || target.directory} · ${target.name}`
+}
+
+/**
+ * Absolute backup directory for one target.
+ * @param target - resolved target.
+ * @returns the absolute directory.
+ */
+function backupDirectory(target) {
+  return join(backupRoot(), targetSegment(target))
+}
+
+/**
+ * Keep only the newest backups of one target.
+ * @param directory - the target's backup directory.
+ */
+async function pruneBackups(directory) {
+  let names
+  try {
+    names = await readdir(directory)
+  } catch (error) {
+    if (error?.code === 'ENOENT') return
+    throw error
+  }
+  const backups = names.filter((name) => name.endsWith('.bak')).sort()
+  const excess = backups.slice(0, Math.max(0, backups.length - MAX_BACKUPS_PER_TARGET))
+  for (const name of excess) {
+    await unlink(join(directory, name)).catch(() => {})
+    await unlink(join(directory, `${name}.json`)).catch(() => {})
+  }
+}
+
+/**
+ * Recover the creation instant from a backup file name.
+ * @param name - backup file name.
+ * @returns ISO instant, or null when the name carries no stamp.
+ */
+function stampFromName(name) {
+  const match = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-(\d{3})/.exec(name)
+  if (match === null) return null
+  const [, year, month, day, hour, minute, second, millisecond] = match
+  return new Date(
+    Number(year), Number(month) - 1, Number(day),
+    Number(hour), Number(minute), Number(second), Number(millisecond),
+  ).toISOString()
+}
+
+/**
+ * Copy the current content of one target into its backup directory.
+ * @param target - resolved target.
+ * @param reason - `save`, `delete`, or `restore`.
+ * @returns the created backup, a `{ skipped }` marker, or null when the file is absent.
+ */
+async function backupBefore(target, reason) {
+  const current = await describeFile(target.path)
+  if (!current.exists) return null
+  if (current.size > MAX_BACKUP_BYTES) return { skipped: 'too-large', size: current.size }
+  const directory = backupDirectory(target)
+  await mkdir(directory, { recursive: true })
+  const createdAt = new Date()
+  const base = `${localStamp(createdAt)}__${safeSegment(target.name, 'rules')}`
+  let id = `${base}.bak`
+  let suffix = 0
+  while ((await describeFile(join(directory, id))).exists) {
+    suffix += 1
+    id = `${base}-${suffix}.bak`
+  }
+  const content = await readFile(target.path)
+  await writeFile(join(directory, id), content)
+  const meta = {
+    version: 1,
+    target: {
+      scope: target.scope,
+      ...(target.scope === 'global' ? { key: target.key } : { directory: target.directory }),
+      name: target.name,
+    },
+    path: target.path,
+    label: targetLabel(target),
+    createdAt: createdAt.toISOString(),
+    size: content.length,
+    reason,
+  }
+  await writeFile(join(directory, `${id}.json`), `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
+  await pruneBackups(directory)
+  return { id, createdAt: meta.createdAt, size: content.length, reason, label: meta.label }
+}
+
+/**
+ * Validate one backup identifier coming from the browser.
+ * @param value - candidate id.
+ * @returns the id.
+ */
+function backupId(value) {
+  if (typeof value !== 'string' || !/^\d{8}-\d{6}-\d{3}__[A-Za-z0-9._-]+\.bak$/.test(value)) {
+    throw new RulesError('invalid-backup', '备份标识无效。')
+  }
+  return value
+}
+
+/**
+ * List one target's backups, newest first.
+ * @param args - `{ target }`.
+ * @returns the backup directory, entries, and the retention cap.
+ */
+async function listBackups(args) {
+  const target = resolveTarget(args?.target)
+  const directory = backupDirectory(target)
+  let names = []
+  try {
+    names = await readdir(directory)
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  const files = names.filter((name) => name.endsWith('.bak')).sort().reverse()
+  const items = []
+  for (const name of files) {
+    const file = join(directory, name)
+    const info = await describeFile(file)
+    if (!info.exists) continue
+    let meta = null
+    try {
+      meta = JSON.parse(await readFile(`${file}.json`, 'utf8'))
+    } catch {
+      /* a backup without sidecar metadata still restores */
+    }
+    items.push({
+      id: name,
+      createdAt: typeof meta?.createdAt === 'string' ? meta.createdAt : stampFromName(name),
+      size: info.size,
+      reason: typeof meta?.reason === 'string' ? meta.reason : 'save',
+      label: typeof meta?.label === 'string' ? meta.label : targetLabel(target),
+    })
+  }
+  return { directory, items: items.sort((left, right) => String(right.createdAt ?? '').localeCompare(String(left.createdAt ?? '')) || right.id.localeCompare(left.id)), max: MAX_BACKUPS_PER_TARGET }
+}
+
+/**
+ * Replace one target with a chosen backup, copying the current content first.
+ * @param args - `{ target, id }`.
+ * @returns the restored file state plus backup warnings.
+ */
+async function restoreBackup(args) {
+  const target = resolveTarget(args?.target)
+  const id = backupId(args?.id)
+  const file = join(backupDirectory(target), id)
+  const backupInfo = await describeFile(file)
+  if (!backupInfo.exists) throw new RulesError('backup-missing', `备份不存在：${id}`)
+  if (backupInfo.size > MAX_BACKUP_BYTES) throw new RulesError('too-large', '备份文件过大，未恢复。')
+  const content = await readFile(file, 'utf8')
+  const warnings = []
+  try {
+    await backupBefore(target, 'restore')
+  } catch (error) {
+    warnings.push(`backup-failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  await mkdir(dirname(target.path), { recursive: true })
+  await writeFile(target.path, content, 'utf8')
+  return { ...target, content, ...(await describeFile(target.path)), warnings }
+}
+
+/**
  * Describe one global file.
  * @param key - `dsh` or `agents`.
  * @param path - absolute file path.
@@ -332,8 +558,9 @@ async function readTarget(args) {
 
 /**
  * Write one target's content, creating the file and its directory when needed.
+ * The current content is copied into the backup directory first.
  * @param args - `{ target, content }`.
- * @returns path, size, and modification time after the write.
+ * @returns path, size, modification time, and any backup warning.
  */
 async function writeTarget(args) {
   const target = resolveTarget(args?.target)
@@ -343,24 +570,38 @@ async function writeTarget(args) {
   if (bytes > MAX_WRITE_BYTES) {
     throw new RulesError('too-large', `规则内容超过 ${Math.floor(MAX_WRITE_BYTES / 1024)} KB，未保存。`)
   }
+  const warnings = []
+  try {
+    const backup = await backupBefore(target, 'save')
+    if (backup?.skipped === 'too-large') warnings.push('backup-too-large')
+  } catch (error) {
+    warnings.push(`backup-failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
   await mkdir(dirname(target.path), { recursive: true })
   await writeFile(target.path, content, 'utf8')
-  return { ...target, content, ...(await describeFile(target.path)) }
+  return { ...target, content, ...(await describeFile(target.path)), warnings }
 }
 
 /**
- * Delete one target file.
+ * Delete one target file, copying it into the backup directory first.
  * @param args - `{ target }`.
- * @returns path and the post-delete state.
+ * @returns path, the post-delete state, and any backup warning.
  */
 async function removeTarget(args) {
   const target = resolveTarget(args?.target)
+  const warnings = []
+  try {
+    const backup = await backupBefore(target, 'delete')
+    if (backup?.skipped === 'too-large') warnings.push('backup-too-large')
+  } catch (error) {
+    warnings.push(`backup-failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
   try {
     await unlink(target.path)
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error
   }
-  return { ...target, ...(await describeFile(target.path)) }
+  return { ...target, ...(await describeFile(target.path)), warnings }
 }
 
 /**
@@ -445,6 +686,8 @@ export function apply(ctx) {
     read: readTarget,
     write: writeTarget,
     remove: removeTarget,
+    backups: listBackups,
+    restore: restoreBackup,
     addProject,
     removeProject,
   }

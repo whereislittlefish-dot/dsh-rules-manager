@@ -173,4 +173,33 @@ console.log('editor texts:', editorTexts.join(' | '))
 if (!editorTexts.includes('AGENTS.md')) throw new Error('editor file name missing')
 if (!editorTexts.includes('action.save')) throw new Error('editor save action missing')
 
+const backupSample = {
+  directory: 'C:\\Users\\demo\\.dsh\\rule-backups\\global-dsh',
+  max: 50,
+  items: [
+    { id: '20261120-171758-123__AGENTS.md.bak', createdAt: '2026-11-20T09:17:58.123Z', size: 2531, reason: 'save' },
+    { id: '20261119-101010-001__AGENTS.md.bak', createdAt: '2026-11-19T02:10:10.001Z', size: 1200, reason: 'delete' },
+  ],
+}
+const withBackups = editorNode.tag({ ...editorNode.props, showBackups: true, backups: backupSample })
+const backupTexts = []
+const backupRows = []
+function walkBackups(tree) {
+  if (tree === null || tree === undefined) return
+  if (Array.isArray(tree)) { for (const item of tree) walkBackups(item); return }
+  if (typeof tree === 'string') { backupTexts.push(tree); return }
+  if (typeof tree !== 'object') return
+  if (tree.props?.className === 'rules-backup') backupRows.push(tree)
+  for (const child of tree.children ?? []) walkBackups(child)
+}
+walkBackups(withBackups)
+const restoreButtons = backupTexts.filter((text) => text === 'action.restore').length
+console.log('backup rows:', backupRows.length, 'restore buttons:', restoreButtons)
+if (backupRows.length !== 2) throw new Error(`expected 2 backup rows, got ${backupRows.length}`)
+if (restoreButtons !== 2) throw new Error(`expected 2 restore buttons, got ${restoreButtons}`)
+if (!backupTexts.includes('backups.title')) throw new Error('backup panel title missing')
+if (!backupTexts.includes('backups.reason.save') || !backupTexts.includes('backups.reason.delete')) {
+  throw new Error('backup reason labels missing')
+}
+
 console.log('RENDER_OK')

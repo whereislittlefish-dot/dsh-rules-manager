@@ -18,6 +18,21 @@ Projects come from the DSH workspace registry. The **Add project** control adds
 any existing absolute directory to the list; removing it only drops the list
 entry and never touches files on disk.
 
+## Backups
+
+Every save, delete, and restore copies the current file into
+`$DSH_HOME/rule-backups/` before touching it. Each rule file gets its own
+folder named after the rule and its owner (`global-dsh`, `global-agents`, or
+`project-<name>-<hash>`), and every backup carries the local timestamp plus the
+original file name, for example
+`20261120-171758-123__AGENTS.md.bak`. A `.json` sidecar next to it records the
+target path, label, creation time, and reason (`save`, `delete`, `restore`).
+
+In the editor, **Backups** lists the backups of the current file and
+**Restore** replaces it with the chosen one. The current content is backed up
+before a restore, so a restore can itself be undone. The newest 50 backups per
+file are kept; older ones are pruned.
+
 ## Using it
 
 1. Open **Settings** in the sidebar, then choose **Rule manager**.
@@ -32,6 +47,8 @@ entry and never touches files on disk.
   route, `/dsh-rules-manager/api/rpc`. The browser never receives a filesystem
   handle.
 - Rule files larger than 1 MiB are listed but cannot be opened in the editor.
+- A failed backup does not block the write; the panel reports it as a warning.
+  Files over 4 MiB are written without a backup.
 - The plugin only accepts the file names in the table above; other paths are
   rejected by the Host.
 - Disabling the plugin removes the settings section and its route; the rule

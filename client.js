@@ -51,6 +51,21 @@ window.__ModuleLoader__.load({
       'action.remove': '移出列表',
       'action.open': '编辑',
       'action.edit': '编辑',
+      'action.backups': '备份',
+      'action.restore': '恢复',
+      'backups.title': '自动备份',
+      'backups.count': '{count} 份',
+      'backups.empty': '这个文件还没有备份。每次保存或删除前会自动备份当前内容。',
+      'backups.hint': '备份目录：{dir}，最多保留 {max} 份。',
+      'backups.reason.save': '保存前',
+      'backups.reason.delete': '删除前',
+      'backups.reason.restore': '恢复前',
+      'backups.reason.other': '备份',
+      'confirm.restore.title': '恢复这个备份？',
+      'confirm.restore.body': '将用 {time} 的备份覆盖当前内容；覆盖前会先备份当前内容，所以仍可撤回。',
+      'notice.restored': '已恢复',
+      'warning.backup': '已写入，但备份失败：{message}',
+      'warning.backupTooLarge': '文件超过 4 MB，已写入但未备份。',
       'action.refreshing': '刷新中…',
       'editor.exists': '文件已存在',
       'editor.new': '文件尚未创建，保存后生成',
@@ -112,6 +127,21 @@ window.__ModuleLoader__.load({
       'action.remove': 'Remove',
       'action.open': 'Edit',
       'action.edit': 'Edit',
+      'action.backups': 'Backups',
+      'action.restore': 'Restore',
+      'backups.title': 'Automatic backups',
+      'backups.count': '{count}',
+      'backups.empty': 'No backups for this file yet. Every save or delete copies the current content first.',
+      'backups.hint': 'Backup folder: {dir}; up to {max} backups are kept.',
+      'backups.reason.save': 'Before save',
+      'backups.reason.delete': 'Before delete',
+      'backups.reason.restore': 'Before restore',
+      'backups.reason.other': 'Backup',
+      'confirm.restore.title': 'Restore this backup?',
+      'confirm.restore.body': 'The {time} backup replaces the current content. The current content is backed up first, so the restore can be undone.',
+      'notice.restored': 'Restored',
+      'warning.backup': 'Written, but the backup failed: {message}',
+      'warning.backupTooLarge': 'The file is over 4 MB; it was written without a backup.',
       'action.refreshing': 'Refreshing…',
       'editor.exists': 'File exists',
       'editor.new': 'Not created yet; saving creates it',
@@ -203,6 +233,17 @@ window.__ModuleLoader__.load({
 .rules-textarea{width:100%;box-sizing:border-box;height:min(46vh,380px);min-height:220px;resize:vertical;padding:12px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-family:var(--dsh-font-family-code,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:12.5px;line-height:20px;outline:none;tab-size:2}
 .rules-textarea:focus{border-color:var(--dsw-alias-brand-primary)}
 .rules-textarea::placeholder{color:var(--dsw-alias-label-tertiary)}
+.rules-backups{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2)}
+.rules-backups-head{display:flex;align-items:center;gap:8px;min-height:26px}
+.rules-backups-title{font-size:12.5px;font-weight:600}
+.rules-backups-list{display:flex;flex-direction:column;max-height:200px;overflow:auto}
+.rules-backup{display:flex;align-items:center;gap:8px;min-height:30px;padding:2px 0;border-top:1px solid var(--dsw-alias-border-l2)}
+.rules-backup:first-child{border-top:none}
+.rules-backup-time{font-family:var(--dsh-font-family-code,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11.5px;color:var(--dsw-alias-label-primary);white-space:nowrap}
+.rules-backup-reason{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.rules-backup-size{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.rules-backups-hint{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:16px;word-break:break-all}
+.rules-warn{display:flex;flex-direction:column;gap:4px;padding:9px 12px;border:1px solid var(--dsw-alias-state-warn-primary);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-warn-primary);font-size:12.5px;line-height:18px}
 .rules-editor-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
 .rules-editor-meta{font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .rules-editor-meta[data-dirty="true"]{color:var(--dsw-alias-state-warn-primary)}
@@ -281,6 +322,36 @@ window.__ModuleLoader__.load({
       const date = new Date(mtime)
       if (Number.isNaN(date.getTime())) return ''
       return date.toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    }
+
+    /**
+     * Format a backup instant with seconds precision.
+     * @param iso - ISO instant.
+     * @returns localized display text.
+     */
+    function formatBackupTime(iso) {
+      if (typeof iso !== 'string' || iso === '') return ''
+      const date = new Date(iso)
+      if (Number.isNaN(date.getTime())) return ''
+      return date.toLocaleString(undefined, {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      })
+    }
+
+    /**
+     * Present one Host backup warning.
+     * @param t - translate function.
+     * @param warning - raw warning token.
+     * @returns display text.
+     */
+    function warningText(t, warning) {
+      if (warning === 'backup-too-large') return t('warning.backupTooLarge')
+      const prefix = 'backup-failed:'
+      if (typeof warning === 'string' && warning.startsWith(prefix)) {
+        return fill(t('warning.backup'), { message: warning.slice(prefix.length).trim() })
+      }
+      return String(warning)
     }
 
     /**
@@ -476,8 +547,56 @@ window.__ModuleLoader__.load({
      * @returns the editor element tree.
      */
     function EditorView(props) {
-      const { t, editor, dirty, busy, onBack, onChange, onSave, onDelete, onReload } = props
+      const {
+        t, editor, dirty, busy, backups, showBackups,
+        onBack, onChange, onSave, onDelete, onReload,
+        onToggleBackups, onReloadBackups, onRestore,
+      } = props
       const characters = editor.content.length
+      const backupLabel = backups === null ? t('action.backups') : `${t('action.backups')} (${backups.items.length})`
+
+      const backupsPanel = showBackups
+        ? h('section', { className: 'rules-backups' },
+          h('div', { className: 'rules-backups-head' },
+            h('span', { className: 'rules-backups-title' }, t('backups.title')),
+            backups === null ? null : h('span', { className: 'rules-count' }, fill(t('backups.count'), { count: backups.items.length })),
+            h('span', { className: 'rules-grow' }),
+            h('button', {
+              type: 'button',
+              className: 'rules-btn',
+              'data-size': 'sm',
+              'data-variant': 'ghost',
+              disabled: busy !== null,
+              onClick: onReloadBackups,
+            }, t('action.refresh')),
+          ),
+          backups === null
+            ? h('div', { className: 'rules-loading' }, '…')
+            : backups.items.length === 0
+              ? h('div', { className: 'rules-empty' }, t('backups.empty'))
+              : h('div', { className: 'rules-backups-list' }, backups.items.map((item) => {
+                const reasonKey = item.reason === 'save' || item.reason === 'delete' || item.reason === 'restore'
+                  ? `backups.reason.${item.reason}`
+                  : 'backups.reason.other'
+                const reasonText = t(reasonKey)
+                return h('div', { className: 'rules-backup', key: item.id },
+                  h('span', { className: 'rules-backup-time' }, formatBackupTime(item.createdAt)),
+                  h('span', { className: 'rules-backup-reason' }, reasonText),
+                  h('span', { className: 'rules-backup-size' }, formatSize(item.size)),
+                  h('span', { className: 'rules-grow' }),
+                  h('button', {
+                    type: 'button',
+                    className: 'rules-btn',
+                    'data-size': 'sm',
+                    disabled: busy !== null,
+                    onClick: () => onRestore(item),
+                  }, t('action.restore')),
+                )
+              })),
+          backups === null ? null : h('div', { className: 'rules-backups-hint' }, fill(t('backups.hint'), { dir: backups.directory, max: backups.max })),
+        )
+        : null
+
       return h('div', { className: 'rules-editor' },
         h('div', { className: 'rules-editor-head' },
           h('button', { type: 'button', className: 'rules-btn', 'data-variant': 'ghost', onClick: onBack }, `← ${t('action.back')}`),
@@ -486,6 +605,15 @@ window.__ModuleLoader__.load({
             h('span', { className: 'rules-editor-state' }, editor.exists ? t('editor.exists') : t('editor.new')),
           ),
           h('span', { className: 'rules-grow' }),
+          h('button', {
+            type: 'button',
+            className: 'rules-btn',
+            'data-size': 'sm',
+            'data-variant': showBackups ? 'primary' : 'ghost',
+            'aria-expanded': showBackups ? 'true' : 'false',
+            disabled: busy !== null,
+            onClick: onToggleBackups,
+          }, backupLabel),
           h('button', {
             type: 'button',
             className: 'rules-btn',
@@ -503,6 +631,7 @@ window.__ModuleLoader__.load({
           placeholder: t('editor.placeholder'),
           onChange: (event) => onChange(event.target.value),
         }),
+        backupsPanel,
         h('div', { className: 'rules-editor-foot' },
           h('span', { className: 'rules-editor-meta', 'data-dirty': dirty ? 'true' : 'false' },
             dirty
@@ -546,6 +675,9 @@ window.__ModuleLoader__.load({
       const [adding, setAdding] = React.useState(false)
       const [addPath, setAddPath] = React.useState('')
       const [confirm, setConfirm] = React.useState(null)
+      const [backups, setBackups] = React.useState(null)
+      const [showBackups, setShowBackups] = React.useState(false)
+      const [warnings, setWarnings] = React.useState([])
       const ticket = React.useRef(0)
 
       const refresh = React.useCallback(async () => {
@@ -578,10 +710,22 @@ window.__ModuleLoader__.load({
         return () => window.removeEventListener('keydown', onKeyDown)
       }, [confirm])
 
+      const loadBackups = React.useCallback(async (target) => {
+        try {
+          const value = await rpc('backups', { target })
+          setBackups(value)
+        } catch {
+          setBackups(null)
+        }
+      }, [])
+
       const openFile = React.useCallback(async (target) => {
         setBusy('open')
         setError(null)
         setConfirm(null)
+        setWarnings([])
+        setShowBackups(false)
+        setBackups(null)
         try {
           const file = await rpc('read', { target })
           setEditor({
@@ -594,12 +738,13 @@ window.__ModuleLoader__.load({
             size: file.size,
             mtime: file.mtime,
           })
+          void loadBackups(target)
         } catch (failure) {
           setError(failure)
         } finally {
           setBusy(null)
         }
-      }, [])
+      }, [loadBackups])
 
       const saveFile = React.useCallback(async () => {
         if (editor === null) return
@@ -609,14 +754,16 @@ window.__ModuleLoader__.load({
         try {
           const saved = await rpc('write', { target: editor.target, content: draft })
           setEditor((current) => current === null ? null : { ...current, exists: true, original: draft, size: saved.size, mtime: saved.mtime })
+          setWarnings(Array.isArray(saved.warnings) ? saved.warnings : [])
           setNotice(t('notice.saved'))
+          void loadBackups(editor.target)
           void refresh()
         } catch (failure) {
           setError(failure)
         } finally {
           setBusy(null)
         }
-      }, [editor, refresh, t])
+      }, [editor, loadBackups, refresh, t])
 
       const deleteFile = React.useCallback(async () => {
         if (editor === null) return
@@ -624,8 +771,10 @@ window.__ModuleLoader__.load({
         setError(null)
         setConfirm(null)
         try {
-          await rpc('remove', { target: editor.target })
+          const removed = await rpc('remove', { target: editor.target })
+          setWarnings(Array.isArray(removed.warnings) ? removed.warnings : [])
           setEditor(null)
+          setShowBackups(false)
           setNotice(t('notice.deleted'))
           await refresh()
         } catch (failure) {
@@ -634,6 +783,33 @@ window.__ModuleLoader__.load({
           setBusy(null)
         }
       }, [editor, refresh, t])
+
+      const restoreBackup = React.useCallback(async (item) => {
+        if (editor === null) return
+        setBusy('restore')
+        setError(null)
+        setConfirm(null)
+        setWarnings([])
+        try {
+          const restored = await rpc('restore', { target: editor.target, id: item.id })
+          setEditor((current) => current === null ? null : {
+            ...current,
+            exists: true,
+            content: restored.content,
+            original: restored.content,
+            size: restored.size,
+            mtime: restored.mtime,
+          })
+          setWarnings(Array.isArray(restored.warnings) ? restored.warnings : [])
+          setNotice(t('notice.restored'))
+          await loadBackups(editor.target)
+          void refresh()
+        } catch (failure) {
+          setError(failure)
+        } finally {
+          setBusy(null)
+        }
+      }, [editor, loadBackups, refresh, t])
 
       const submitProject = React.useCallback(async () => {
         setBusy('project')
@@ -694,6 +870,10 @@ window.__ModuleLoader__.load({
           title = t('confirm.removeProject.title')
           body = t('confirm.removeProject.body')
           action = () => { void removeProject(confirm.project) }
+        } else if (confirm.kind === 'restore') {
+          title = t('confirm.restore.title')
+          body = fill(t('confirm.restore.body'), { time: formatBackupTime(confirm.item.createdAt) })
+          action = () => { void restoreBackup(confirm.item) }
         }
         return h('div', { className: 'rules-modal' },
           h('div', { className: 'rules-modal-card', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
@@ -729,13 +909,24 @@ window.__ModuleLoader__.load({
             editor,
             dirty,
             busy,
+            backups,
+            showBackups,
             onBack: requestBack,
             onChange: (value) => setEditor((current) => current === null ? null : { ...current, content: value }),
             onSave: () => { void saveFile() },
             onDelete: () => setConfirm({ kind: 'delete' }),
             onReload: () => { void openFile(editor.target) },
+            onToggleBackups: () => {
+              setShowBackups((value) => !value)
+              if (editor !== null) void loadBackups(editor.target)
+            },
+            onReloadBackups: () => { if (editor !== null) void loadBackups(editor.target) },
+            onRestore: (item) => setConfirm({ kind: 'restore', item }),
           }),
         error !== null ? h('div', { className: 'rules-alert', role: 'alert' }, errorText(t, error)) : null,
+        warnings.length > 0
+          ? h('div', { className: 'rules-warn', role: 'status' }, warnings.map((warning, index) => h('div', { key: index }, warningText(t, warning))))
+          : null,
         notice !== null ? h('div', { className: 'rules-toast', role: 'status' }, notice) : null,
         confirmView,
       )

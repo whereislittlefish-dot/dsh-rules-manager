@@ -104,6 +104,46 @@ console.log('removeProject:', removedProject.path)
 const settings = JSON.parse(await readFile(join(HOME, 'rules-manager.json'), 'utf8'))
 console.log('settings projects:', settings.projects)
 
+// Backups: each save copies the previous content, restore brings one back.
+const target = { scope: 'project', path: PROJECT, name: 'AGENTS.md' }
+const afterFirstSave = await rpc('write', { target, content: '# project rules v2\n' })
+console.log('save 1 warnings:', afterFirstSave.warnings)
+const firstBackups = await rpc('backups', { target })
+console.log('backups after save 1:', firstBackups.items.length, firstBackups.items[0]?.reason)
+if (firstBackups.items.length !== 1) throw new Error('first save did not create one backup')
+
+await new Promise((resolve) => setTimeout(resolve, 20))
+const afterSecondSave = await rpc('write', { target, content: '# project rules v3\n' })
+console.log('save 2 warnings:', afterSecondSave.warnings)
+const secondBackups = await rpc('backups', { target })
+console.log('backups after save 2:', secondBackups.items.length)
+if (secondBackups.items.length !== 2) throw new Error('second save did not create one backup')
+
+const older = secondBackups.items[1]
+const restored = await rpc('restore', { target, id: older.id })
+console.log('restored content:', JSON.stringify(restored.content), 'warnings:', restored.warnings)
+const onDisk = await readFile(join(PROJECT, 'AGENTS.md'), 'utf8')
+if (onDisk !== '# project rules\n') throw new Error(`restore wrote ${JSON.stringify(onDisk)}`)
+const afterRestore = await rpc('backups', { target })
+console.log('backups after restore:', afterRestore.items.length, afterRestore.items.map((item) => item.reason).join(','))
+if (afterRestore.items.length !== 3) throw new Error('restore did not snapshot the replaced content')
+
+const deleted = await rpc('remove', { target })
+console.log('delete warnings:', deleted.warnings)
+const afterDelete = await rpc('backups', { target })
+console.log('backups after delete:', afterDelete.items.length, afterDelete.items[0]?.reason)
+if (afterDelete.items[0]?.reason !== 'delete') throw new Error('delete did not back up the file')
+
+for (const badId of ['../../etc/passwd', '20261120-171758-123__AGENTS.md', 'x.bak', '']) {
+  try {
+    await rpc('restore', { target, id: badId })
+    throw new Error(`accepted an invalid backup id: ${badId}`)
+  } catch (error) {
+    if (error.code !== 'invalid-backup') throw error
+  }
+}
+console.log('invalid backup ids rejected')
+
 let rejected = 0
 for (const bad of [
   { scope: 'project', path: 'relative/dir', name: 'AGENTS.md' },
