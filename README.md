@@ -1,5 +1,7 @@
 # Rules manager
 
+English | [中文](README.zh.md)
+
 `dsh-rules-manager` adds a **Rule manager** section to the DSH settings panel: it lists
 the rule files DSH loads as workspace instructions and lets you view, create,
 edit, and delete them without leaving the app.
