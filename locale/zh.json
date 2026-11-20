@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "规则管理",
-    "description": "在「设置」中新增「规则」分区：列出用户全局规则（$DSH_HOME/AGENTS.md、$DSH_AGENTS_HOME/AGENTS.md）与每个项目的 AGENTS.md、CLAUDE.md、AGENTS.local.md、CLAUDE.local.md，可查看、新建、编辑、删除，也能把任意已有目录加入项目列表。保存后的规则文件会在下一个会话开始时由 DSH 加载。",
+    "description": "在「设置」中新增「规则管理」分区：列出用户全局规则（$DSH_HOME/AGENTS.md、$DSH_AGENTS_HOME/AGENTS.md）与每个项目的 AGENTS.md、CLAUDE.md、AGENTS.local.md、CLAUDE.local.md。用全局卡片上的「编辑」按钮，或项目卡片里每个文件行的「编辑」按钮，查看、新建、编辑、删除对应的规则文件；也能把任意已有目录加入项目列表。保存后的规则文件会在下一个会话开始时由 DSH 加载。",
     "detail": "docs/DETAIL.md"
   }
 }

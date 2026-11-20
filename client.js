@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     const NOTICE_MS = 3200
 
     const DICT_ZH = {
-      'nav': '规则',
+      'nav': '规则管理',
       'title': '规则管理',
       'intro': '管理 DSH 的全局规则与各项目规则。这些 AGENTS.md 文件会在会话开始时作为工作区指令交给模型；更具体的文件优先于更宽泛的文件。',
       'group.global': '全局规则',
@@ -50,6 +50,7 @@ window.__ModuleLoader__.load({
       'action.confirm': '确定',
       'action.remove': '移出列表',
       'action.open': '编辑',
+      'action.edit': '编辑',
       'action.refreshing': '刷新中…',
       'editor.exists': '文件已存在',
       'editor.new': '文件尚未创建，保存后生成',
@@ -85,7 +86,7 @@ window.__ModuleLoader__.load({
     }
 
     const DICT_EN = {
-      'nav': 'Rules',
+      'nav': 'Rule manager',
       'title': 'Rule files',
       'intro': 'Manage DSH global and per-project rule files. These AGENTS.md files reach the model as workspace instructions when a session starts; more specific files take precedence over broader ones.',
       'group.global': 'Global rules',
@@ -110,6 +111,7 @@ window.__ModuleLoader__.load({
       'action.confirm': 'Confirm',
       'action.remove': 'Remove',
       'action.open': 'Edit',
+      'action.edit': 'Edit',
       'action.refreshing': 'Refreshing…',
       'editor.exists': 'File exists',
       'editor.new': 'Not created yet; saving creates it',
@@ -155,23 +157,20 @@ window.__ModuleLoader__.load({
 .rules-count{font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .rules-cards{display:flex;flex-direction:column;gap:8px}
 .rules-card{display:flex;flex-direction:column;gap:9px;padding:12px 14px;border:1px solid var(--dsw-alias-settings-card-stroke,var(--dsw-alias-border-l2));border-radius:12px;background:var(--dsw-alias-settings-card-fill,var(--dsw-alias-bg-layer-2))}
-.rules-card[data-clickable="true"]{cursor:pointer}
-.rules-card[data-clickable="true"]:hover{border-color:var(--dsw-alias-border-l3)}
-.rules-card-head{display:flex;align-items:center;gap:8px;min-width:0}
+.rules-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
 .rules-card-title{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rules-badge{flex:none;padding:1px 7px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .rules-grow{flex:1 1 auto;min-width:0}
 .rules-card-path{font-family:var(--dsh-font-family-code,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11.5px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rules-card-state{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .rules-card-state[data-warn="true"]{color:var(--dsw-alias-state-warn-primary)}
-.rules-files{display:flex;flex-wrap:wrap;gap:6px}
-.rules-file{appearance:none;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border:1px dashed var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-family:var(--dsh-font-family-code,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11.5px;cursor:pointer;transition:background .12s ease,color .12s ease,border-color .12s ease}
-.rules-file[data-state="on"]{border-style:solid;border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.rules-file:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.rules-file:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.rules-file-list{display:flex;flex-direction:column}
+.rules-file-row{display:flex;align-items:center;gap:8px;min-height:30px;padding:2px 0;border-top:1px solid var(--dsw-alias-border-l2)}
+.rules-file-row:first-child{border-top:none}
+.rules-file-name{font-family:var(--dsh-font-family-code,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11.5px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rules-file-size{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
 .rules-dot{width:6px;height:6px;flex:none;border-radius:999px;background:var(--dsw-alias-border-l3)}
-.rules-file[data-state="on"] .rules-dot{background:var(--dsw-alias-state-success-primary)}
-.rules-file-meta{color:var(--dsw-alias-label-tertiary);font-size:11px}
+.rules-dot[data-state="on"]{background:var(--dsw-alias-state-success-primary)}
 .rules-empty{padding:16px;border:1px dashed var(--dsw-alias-border-l2);border-radius:12px;font-size:12.5px;line-height:19px;color:var(--dsw-alias-label-tertiary)}
 .rules-add{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2)}
 .rules-add-title{margin:0;font-size:12.5px;font-weight:600}
@@ -317,24 +316,25 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * One file row inside a card.
+     * One rule file inside a project card, with its own edit action.
      * @param props - file row props.
-     * @returns the button element.
+     * @returns the row element.
      */
-    function FileButton(props) {
-      const { t, file, enabled, onOpen } = props
-      const state = file.exists ? 'on' : 'off'
-      return h('button', {
-        type: 'button',
-        className: 'rules-file',
-        'data-state': state,
-        title: file.path,
-        disabled: !enabled,
-        onClick: () => onOpen(file),
-      },
-        h('span', { className: 'rules-dot', 'aria-hidden': 'true' }),
-        h('span', null, file.name),
-        h('span', { className: 'rules-file-meta' }, file.exists ? formatSize(file.size) : t('file.missing')),
+    function FileRow(props) {
+      const { t, file, enabled, onEdit } = props
+      return h('div', { className: 'rules-file-row' },
+        h('span', { className: 'rules-dot', 'data-state': file.exists ? 'on' : 'off', 'aria-hidden': 'true' }),
+        h('span', { className: 'rules-file-name', title: file.path }, file.name),
+        h('span', { className: 'rules-file-size' }, file.exists ? (file.size === 0 ? t('state.empty') : formatSize(file.size)) : t('file.missing')),
+        h('span', { className: 'rules-grow' }),
+        h('button', {
+          type: 'button',
+          className: 'rules-btn',
+          'data-size': 'sm',
+          'data-variant': 'ghost',
+          disabled: !enabled,
+          onClick: () => onEdit(file),
+        }, t('action.edit')),
       )
     }
 
@@ -406,21 +406,18 @@ window.__ModuleLoader__.load({
               h('div', { className: 'rules-cards' }, globals.map((item) => h('div', {
                 key: item.key,
                 className: 'rules-card',
-                'data-clickable': 'true',
-                role: 'button',
-                tabIndex: 0,
-                onClick: () => onOpen({ scope: 'global', key: item.key, name: 'AGENTS.md' }),
-                onKeyDown: (event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    onOpen({ scope: 'global', key: item.key, name: 'AGENTS.md' })
-                  }
-                },
               },
                 h('div', { className: 'rules-card-head' },
                   h('span', { className: 'rules-card-title' }, t(`global.${item.key}`)),
                   h('span', { className: 'rules-grow' }),
-                  h('span', { className: 'rules-card-state', title: item.path }, item.exists ? fill(t('state.exists'), { size: formatSize(item.size), time: formatTime(item.mtime) }) : t('state.missing')),
+                  h('span', { className: 'rules-card-state', title: item.path }, item.exists ? (item.size === 0 ? t('state.empty') : fill(t('state.exists'), { size: formatSize(item.size), time: formatTime(item.mtime) })) : t('state.missing')),
+                  h('button', {
+                    type: 'button',
+                    className: 'rules-btn',
+                    'data-size': 'sm',
+                    'data-variant': 'primary',
+                    onClick: () => onOpen({ scope: 'global', key: item.key, name: 'AGENTS.md' }),
+                  }, t('action.edit')),
                 ),
                 h('div', { className: 'rules-card-path', title: item.path }, item.path),
                 h('div', { className: 'rules-card-state' }, t(`global.${item.key}.hint`)),
@@ -460,12 +457,12 @@ window.__ModuleLoader__.load({
                       : null,
                   ),
                   h('div', { className: 'rules-card-path', title: project.path }, project.path),
-                  h('div', { className: 'rules-files' }, project.files.map((file) => h(FileButton, {
+                  h('div', { className: 'rules-file-list' }, project.files.map((file) => h(FileRow, {
                     key: file.name,
                     t,
                     file,
                     enabled: project.exists,
-                    onOpen: (target) => onOpen({ scope: 'project', path: project.path, name: target.name }),
+                    onEdit: (target) => onOpen({ scope: 'project', path: project.path, name: target.name }),
                   }))),
                 ))),
             ),

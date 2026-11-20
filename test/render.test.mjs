@@ -86,7 +86,8 @@ const dictionaries = localeRegistrations[0].dictionaries
 const zhKeys = Object.keys(dictionaries.zh)
 const enKeys = Object.keys(dictionaries.en)
 if (zhKeys.length !== enKeys.length) throw new Error('locale dictionaries differ in size')
-console.log('locale keys:', zhKeys.length)
+if (dictionaries.zh.nav !== '规则管理') throw new Error(`settings nav label is ${dictionaries.zh.nav}`)
+console.log('locale keys:', zhKeys.length, 'nav:', dictionaries.zh.nav)
 
 const section = registrations.find((entry) => entry.options.name === 'settings.section')
 if (section === undefined) throw new Error('settings.section was not registered')
@@ -123,7 +124,7 @@ function walk(tree) {
   if (Array.isArray(tree)) { for (const item of tree) walk(item); return }
   if (typeof tree === 'string') { texts.push(tree); return }
   if (typeof tree !== 'object') return
-  if (typeof tree.tag === 'function' && tree.tag.name === 'FileButton') {
+  if (typeof tree.tag === 'function' && tree.tag.name === 'FileRow') {
     walk(tree.tag(tree.props))
     return
   }
@@ -132,9 +133,11 @@ function walk(tree) {
 }
 walk(listTree)
 
-const fileButtons = buttons.filter((button) => String(button.props.className).includes('rules-file'))
-console.log('file buttons:', fileButtons.map((button) => `${button.children[1].children[0]}:${button.props['data-state']}`).join(', '))
-if (fileButtons.length !== 5) throw new Error(`expected 5 file buttons, got ${fileButtons.length}`)
+const editButtons = buttons.filter((button) => String(button.props.className).includes('rules-btn')
+  && (button.children ?? []).includes('action.edit'))
+const fileRows = texts.filter((text) => text === 'AGENTS.md' || text === 'CLAUDE.md' || text === 'AGENTS.local.md' || text === 'CLAUDE.local.md')
+console.log('edit buttons:', editButtons.length, 'file name cells:', fileRows.length)
+if (editButtons.length !== 7) throw new Error(`expected 7 edit buttons (2 global + 5 project files), got ${editButtons.length}`)
 if (!texts.includes('DSH')) throw new Error('project title missing from the list')
 
 const editorState = {

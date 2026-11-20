@@ -1,6 +1,6 @@
 # Rules manager
 
-`dsh-rules-manager` adds a **Rules** section to the DSH settings panel: it lists
+`dsh-rules-manager` adds a **Rule manager** section to the DSH settings panel: it lists
 the rule files DSH loads as workspace instructions and lets you view, create,
 edit, and delete them without leaving the app.
 
@@ -18,8 +18,8 @@ entry and never touches files on disk.
 
 ## Using it
 
-1. Open **Settings** in the sidebar, then choose **Rules**.
-2. Pick a global card, or a file chip inside a project card.
+1. Open **Settings** in the sidebar, then choose **Rule manager**.
+2. Press **Edit** on a global card, or on one file row inside a project card.
 3. Edit in the text area and press **Save**. Saving a missing file creates it
    (and its directory when needed); **Delete** removes it from disk.
 4. Restart or start a new session for DSH to load the changed instructions.
