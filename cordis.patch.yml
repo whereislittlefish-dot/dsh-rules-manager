@@ -1,0 +1,6 @@
+# The dsh-rules-manager bundle patch: one Host row serving the settings page's API.
+# The browser half is declared by package.json's `dsh.client` section and loads
+# as its own client entry; this row only needs the HTTP server.
+- insert:
+    - id: rules-manager
+      name: dsh-rules-manager
