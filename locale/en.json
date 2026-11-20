@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Rule files",
-    "description": "Settings section that lists and edits DSH's user-global and per-project rule files (AGENTS.md, CLAUDE.md, AGENTS.local.md, CLAUDE.local.md). Open Settings, choose Rules, then pick a global file or expand a project to view, create, edit, or delete its rule file; any existing directory can be added to the project list. Saved files are picked up by DSH when the next session starts."
+    "description": "Settings section that lists and edits DSH's user-global and per-project rule files (AGENTS.md, CLAUDE.md, AGENTS.local.md, CLAUDE.local.md). Open Settings, choose Rules, then pick a global file or expand a project to view, create, edit, or delete its rule file; any existing directory can be added to the project list. Saved files are picked up by DSH when the next session starts.",
+    "detail": "docs/DETAIL.md"
   }
 }

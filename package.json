@@ -13,6 +13,9 @@
     "./package.json": "./package.json"
   },
   "icon": "./icon.svg",
+  "scripts": {
+    "test": "node test/host.test.mjs && node test/render.test.mjs"
+  },
   "engines": {
     "node": ">=20"
   },

@@ -1,3 +1,4 @@
 node_modules/
+test/.runtime/
 *.tgz
 .DS_Store
